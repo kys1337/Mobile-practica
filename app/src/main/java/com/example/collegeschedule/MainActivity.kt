@@ -4,31 +4,25 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
-import com.example.collegeschedule.data.api.ScheduleApi
-import com.example.collegeschedule.data.repository.ScheduleRepository
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.collegeschedule.ui.favorites.FavoritesScreen
 import com.example.collegeschedule.ui.schedule.ScheduleScreen
 import com.example.collegeschedule.ui.theme.CollegeScheduleTheme
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,52 +36,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@PreviewScreenSizes
-@Composable
-fun CollegeScheduleApp() {
-    var currentDestination by rememberSaveable {
-        mutableStateOf(AppDestinations.HOME) }
+// Простой ViewModel для обмена данными между экранами
+class AppViewModel {
+    private val _selectedGroup = MutableStateFlow("ИС-12")
+    val selectedGroup: StateFlow<String> = _selectedGroup.asStateFlow()
 
-    val retrofit = remember {
-        Retrofit.Builder()
-            .baseUrl("http://10.0.2.2:5268/") // localhost для Android Emulator
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-    }
-    val api = remember { retrofit.create(ScheduleApi::class.java) }
-    val repository = remember { ScheduleRepository(api) }
-
-
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            AppDestinations.entries.forEach {
-                item(
-                    icon = {
-                        Icon(
-                            it.icon,
-                            contentDescription = it.label
-                        )
-                    },
-                    label = { Text(it.label) },
-                    selected = it == currentDestination,
-                    onClick = { currentDestination = it }
-                )
-            }
-        }
-    ) {
-        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            when (currentDestination) {
-                AppDestinations.HOME -> ScheduleScreen()
-
-                AppDestinations.FAVORITES ->
-                    Text("Избранные группы", modifier =
-                        Modifier.padding(innerPadding))
-
-                AppDestinations.PROFILE ->
-                    Text("Профиль студента", modifier =
-                        Modifier.padding(innerPadding))
-            }
-        }
+    fun setSelectedGroup(group: String) {
+        _selectedGroup.value = group
     }
 }
 
@@ -95,7 +50,146 @@ enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
 ) {
-    HOME("Home", Icons.Default.Home),
-    FAVORITES("Favorites", Icons.Default.Favorite),
-    PROFILE("Profile", Icons.Default.AccountBox),
+    HOME("Расписание", Icons.Default.Home),
+    FAVORITES("Избранное", Icons.Default.Favorite),
+    PROFILE("Профиль", Icons.Default.AccountBox),
+}
+
+@Composable
+fun CollegeScheduleApp() {
+    var currentDestination by remember { mutableStateOf(AppDestinations.HOME) }
+    val appViewModel = remember { AppViewModel() }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                AppDestinations.entries.forEach { destination ->
+                    NavigationBarItem(
+                        icon = {
+                            Icon(
+                                destination.icon,
+                                contentDescription = destination.label
+                            )
+                        },
+                        label = { Text(destination.label) },
+                        selected = currentDestination == destination,
+                        onClick = { currentDestination = destination }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            when (currentDestination) {
+                AppDestinations.HOME -> {
+                    ScheduleScreen(
+                        onGroupSelected = { group ->
+                            appViewModel.setSelectedGroup(group)
+                        }
+                    )
+                }
+
+                AppDestinations.FAVORITES -> {
+                    FavoritesScreen(
+                        onGroupSelected = { group ->
+                            appViewModel.setSelectedGroup(group)
+                            currentDestination = AppDestinations.HOME
+                        }
+                    )
+                }
+
+                AppDestinations.PROFILE -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Профиль студента\n\n" +
+                                    "Добавьте:\n" +
+                                    "• ФИО\n" +
+                                    "• Группу\n" +
+                                    "• Аватар\n" +
+                                    "• Настройки",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Альтернатива без ViewModel (более простая)
+@Composable
+fun CollegeScheduleAppSimple() {
+    var currentDestination by remember { mutableStateOf(AppDestinations.HOME) }
+    var selectedGroup by remember { mutableStateOf("ИС-12") }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                AppDestinations.entries.forEach { destination ->
+                    NavigationBarItem(
+                        icon = {
+                            Icon(
+                                destination.icon,
+                                contentDescription = destination.label
+                            )
+                        },
+                        label = { Text(destination.label) },
+                        selected = currentDestination == destination,
+                        onClick = { currentDestination = destination }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            when (currentDestination) {
+                AppDestinations.HOME -> {
+                    // Передаем selectedGroup в ScheduleScreen
+                    ScheduleScreen(
+                        initialGroup = selectedGroup,
+                        onGroupSelected = { group ->
+                            selectedGroup = group
+                        }
+                    )
+                }
+
+                AppDestinations.FAVORITES -> {
+                    FavoritesScreen(
+                        onGroupSelected = { group ->
+                            selectedGroup = group
+                            currentDestination = AppDestinations.HOME
+                        }
+                    )
+                }
+
+                AppDestinations.PROFILE -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Профиль студента")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun CollegeScheduleAppPreview() {
+    CollegeScheduleTheme {
+        CollegeScheduleAppSimple()
+    }
 }
